@@ -34,7 +34,7 @@ new_09h:
 		cmp	bufptr, MAXBUFF
 		jae	call_old_09	;Check if buffer is overflown
 
-		in	al, 60h                 
+		in	al, 60h         ;Read scan-code from 60h port
 
 		cmp   	al, SHIFT  	;Don't remember Shift, Alt and Ctrl               
 		ja    	call_old_09             
