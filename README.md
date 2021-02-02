@@ -1,2 +1,2 @@
 # Keylogger
-TSR reading scan-codes and writing them to files
+Resident DOS program logging the scan-codes of the keys pressed into a file.
